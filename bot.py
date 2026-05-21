@@ -1,101 +1,136 @@
 """
-Bot do Telegram — Interface principal do Agente Autônomo
-Conecta o agente ao Telegram para interação em tempo real
+Bot do Telegram com whitelist de usuarios e memoria persistente por usuario
 """
-from dotenv import load_dotenv
-load_dotenv()
 
 import os
 import logging
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
+    Application, CommandHandler, MessageHandler,
+    filters, ContextTypes,
 )
 from agent import Agent
 
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("agent.log", encoding="utf-8"),
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Instância global do agente (uma por sessão de bot)
+AGENT_NAME = os.environ.get("AGENT_NAME", "Karen")
+
+# ── Whitelist de usuarios ─────────────────────────────────────────────────────
+def _load_whitelist() -> set[int]:
+    raw = os.environ.get("TELEGRAM_ALLOWED_USER_IDS", "")
+    if not raw.strip():
+        return set()  # vazio = todos permitidos (modo desenvolvimento)
+    ids = set()
+    for item in raw.split(","):
+        item = item.strip()
+        if item.isdigit():
+            ids.add(int(item))
+    return ids
+
+ALLOWED_USER_IDS = _load_whitelist()
 agent = Agent()
 
 
-# ── Handlers de Comandos ──────────────────────────────────────────────────────
+def _is_allowed(user_id: int) -> bool:
+    if not ALLOWED_USER_IDS:
+        return True  # sem whitelist configurada, permite todos
+    return user_id in ALLOWED_USER_IDS
+
+
+# ── Handlers ──────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mensagem de boas-vindas."""
+    user_id = update.effective_user.id
+    if not _is_allowed(user_id):
+        await update.message.reply_text("Acesso nao autorizado.")
+        logger.warning(f"Acesso negado para user_id={user_id}")
+        return
+
     await update.message.reply_text(
-        "👋 Olá! Sou seu *ProbectZmBot* — um assistente autônomo com capacidade de:\n\n"
-        "🔍 *Web Search* — buscar informações atuais\n"
-        "📅 *Google Calendar* — gerenciar sua agenda\n\n"
-        "Exemplos do que posso fazer:\n"
-        "• _\"Quais são as últimas notícias sobre IA?\"_\n"
-        "• _\"Quais são meus compromissos desta semana?\"_\n"
-        "• _\"Agende uma reunião amanhã às 15h\"_\n\n"
-        "Use /ajuda para ver todos os comandos.",
-        parse_mode="Markdown"
+        f"Ola! Sou {AGENT_NAME}, seu assistente pessoal autonomo.\n\n"
+        "Posso ajudar com:\n"
+        "- Busca na web\n"
+        "- Gerenciar sua agenda (Google Calendar)\n"
+        "- Responder perguntas e muito mais\n\n"
+        "Use /ajuda para ver os comandos disponiveis."
     )
 
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Exibe os comandos disponíveis."""
+    if not _is_allowed(update.effective_user.id):
+        return
+
+    stats = agent.get_stats(str(update.effective_user.id))
     await update.message.reply_text(
-        "📋 *Comandos disponíveis:*\n\n"
-        "/start — Apresentação do bot\n"
-        "/ajuda — Esta mensagem\n"
-        "/limpar — Limpa o histórico de conversa\n"
-        "/status — Verifica status do agente\n\n"
-        "*Exemplos de uso:*\n"
-        "• Busca: _\"Pesquise sobre o clima em Brasília\"_\n"
-        "• Agenda: _\"Mostre minha agenda da semana\"_\n"
-        "• Criar evento: _\"Marque consulta médica dia 20/06 às 10h\"_\n"
-        "• Cancelar evento: _\"Cancele a reunião de amanhã\"_",
-        parse_mode="Markdown"
+        "Comandos disponiveis:\n\n"
+        "/start - Apresentacao\n"
+        "/ajuda - Esta mensagem\n"
+        "/limpar - Limpa historico de conversa\n"
+        "/status - Status e estatisticas\n\n"
+        f"Suas estatisticas:\n"
+        f"- Mensagens totais: {stats['total_messages']}\n"
+        f"- Mensagens na sessao: {stats['session_messages']}"
     )
 
 
 async def limpar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Limpa o histórico de conversa."""
-    agent.clear_history()
-    await update.message.reply_text(
-        "🗑️ Histórico de conversa limpo! Podemos começar do zero."
-    )
+    user_id = update.effective_user.id
+    if not _is_allowed(user_id):
+        return
+    agent.clear_history(str(user_id))
+    await update.message.reply_text("Historico limpo! Podemos comecar do zero.")
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Verifica o status do agente."""
-    msg_count = len(agent.conversation_history)
+    user_id = update.effective_user.id
+    if not _is_allowed(user_id):
+        return
+
+    stats = agent.get_stats(str(user_id))
+    facts_text = ""
+    if stats["facts"]:
+        facts_text = "\nFatos que lembro de voce:\n" + "\n".join(
+            f"- {k}: {v}" for k, v in stats["facts"].items()
+        )
+
     await update.message.reply_text(
-        f"✅ *Status do Agente:*\n\n"
-        f"• Mensagens no histórico: {msg_count}\n"
-        f"• Janela de contexto: máx. 20 mensagens\n"
-        f"• Ferramentas ativas: Web Search, Google Calendar\n"
-        f"• Modelo: Claude claude-opus-4-5",
-        parse_mode="Markdown"
+        f"Status do Agente {AGENT_NAME}:\n\n"
+        f"- Total de mensagens trocadas: {stats['total_messages']}\n"
+        f"- Mensagens na sessao atual: {stats['session_messages']}\n"
+        f"- Janela de contexto: max {20} mensagens\n"
+        f"- Memoria: SQLite (persistente)\n"
+        f"- Modelo: Gemini 2.0 Flash\n"
+        f"- Ferramentas: Web Search, Google Calendar"
+        f"{facts_text}"
     )
 
 
-# ── Handler de Mensagens ──────────────────────────────────────────────────────
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa mensagens do usuário e retorna resposta do agente."""
+    user_id = update.effective_user.id
+    if not _is_allowed(user_id):
+        await update.message.reply_text("Acesso nao autorizado.")
+        return
+
     user_message = update.message.text
     user_name = update.effective_user.first_name
+    logger.info(f"Mensagem de {user_name} (id={user_id}): {user_message[:80]}")
 
-    logger.info(f"📱 Mensagem de {user_name}: {user_message[:80]}")
-
-    # Feedback visual de processamento
-    thinking_msg = await update.message.reply_text("⏳ Pensando...")
+    thinking_msg = await update.message.reply_text("Pensando...")
 
     try:
-        # Chama o agente
-        response = agent.process_message(user_message)
-        
-        # Apaga "pensando..." e envia resposta
+        response = agent.process_message(str(user_id), user_message)
         await thinking_msg.delete()
-        
-        # Divide mensagem longa (limite do Telegram: 4096 chars)
+
         if len(response) > 4096:
             chunks = [response[i:i+4096] for i in range(0, len(response), 4096)]
             for chunk in chunks:
@@ -116,29 +151,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         await update.message.reply_text(
-            "Erro ao processar sua mensagem. Tente novamente ou use /limpar para reiniciar."
+            "Erro ao processar sua mensagem. Tente novamente ou use /limpar."
         )
 
 
-# ── Inicialização do Bot ──────────────────────────────────────────────────────
+# ── Inicializacao ─────────────────────────────────────────────────────────────
 def main():
-    """Inicia o bot do Telegram."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
-        raise ValueError("TELEGRAM_BOT_TOKEN não configurado!")
+        raise ValueError("TELEGRAM_BOT_TOKEN nao configurado!")
 
-    logger.info("🚀 Iniciando bot do Telegram...")
+    if ALLOWED_USER_IDS:
+        logger.info(f"Whitelist ativa: {ALLOWED_USER_IDS}")
+    else:
+        logger.info("Sem whitelist - todos os usuarios permitidos")
+
+    logger.info(f"Iniciando {AGENT_NAME}...")
 
     app = Application.builder().token(token).build()
-
-    # Registra handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ajuda", ajuda))
     app.add_handler(CommandHandler("limpar", limpar))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("✅ Bot iniciado! Aguardando mensagens...")
+    logger.info(f"{AGENT_NAME} iniciado! Aguardando mensagens...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
