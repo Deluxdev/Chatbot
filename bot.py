@@ -107,9 +107,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Status do Agente {AGENT_NAME}:\n\n"
         f"- Total de mensagens trocadas: {stats['total_messages']}\n"
         f"- Mensagens na sessao atual: {stats['session_messages']}\n"
-        f"- Janela de contexto: max {20} mensagens\n"
+        f"- Custo acumulado na sessao: US$ {stats['custo_sessao_usd']:.6f}\n"
+        f"- Janela de contexto: max 20 mensagens\n"
         f"- Memoria: SQLite (persistente)\n"
-        f"- Modelo: Gemini 2.0 Flash\n"
+        f"- Modelo: Gemini 2.5 Flash Lite\n"
         f"- Ferramentas: Web Search, Google Calendar"
         f"{facts_text}"
     )
@@ -129,6 +130,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         response = agent.process_message(str(user_id), user_message)
+
+        # Mensagem bloqueada pelo filtro de seguranca (silencioso)
+        if response is None:
+            await thinking_msg.delete()
+            return
+
         await thinking_msg.delete()
 
         if len(response) > 4096:

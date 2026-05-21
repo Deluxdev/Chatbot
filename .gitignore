@@ -96,8 +96,12 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 # poetry.lock
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+# Google OAuth
+credentials.json
+token.json
+
+# PDM
+#  Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
 # pdm.lock
 
 # PEP 582; used by e.g. github.com/pypa/pdm
