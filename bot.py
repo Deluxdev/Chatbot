@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-AGENT_NAME = os.environ.get("AGENT_NAME", "Karen")
+AGENT_NAME = os.environ.get("AGENT_NAME", "Jarvis")
 
 # ── Whitelist de usuarios ─────────────────────────────────────────────────────
 def _load_whitelist() -> set[int]:

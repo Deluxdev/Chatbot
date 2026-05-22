@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 MAX_CONTEXT_MESSAGES = 20
 MAX_ITERATIONS = 8
 MODEL = "models/gemini-2.5-flash-lite"
-AGENT_NAME = os.environ.get("AGENT_NAME", "Karen")
+AGENT_NAME = os.environ.get("AGENT_NAME", "Jarvis")
 
 # ── Precos do modelo (por 1 milhao de tokens) ─────────────────────────────────
 # Fonte: https://ai.google.dev/pricing  (gemini-2.5-flash-lite)
