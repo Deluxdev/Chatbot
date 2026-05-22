@@ -30,6 +30,7 @@ MAX_CONTEXT_MESSAGES = 20
 MAX_ITERATIONS = 8
 MODEL = "models/gemini-2.5-flash-lite"
 AGENT_NAME = os.environ.get("AGENT_NAME", "Jarvis")
+<<<<<<< Updated upstream
 
 # ── Precos do modelo (por 1 milhao de tokens) ─────────────────────────────────
 # Fonte: https://ai.google.dev/pricing  (gemini-2.5-flash-lite)
@@ -90,6 +91,8 @@ def calculate_cost(input_tokens: int, output_tokens: int) -> float:
            (output_tokens / 1_000_000 * PRICE_OUTPUT_PER_M)
     return cost
 
+=======
+>>>>>>> Stashed changes
 
 SYSTEM_PROMPT = f"""Voce e {AGENT_NAME}, um assistente pessoal autonomo e inteligente.
 
